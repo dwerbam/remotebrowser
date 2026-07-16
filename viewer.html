@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote Browser</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #222; display: flex; flex-direction: column; height: 100vh; font: 14px sans-serif; }
+  #toolbar { background: #333; padding: 6px 10px; display: flex; gap: 8px; align-items: center; }
+  #urlbar { flex: 1; padding: 6px 10px; border: 1px solid #555; border-radius: 3px; background: #1a1a1a; color: #ddd; font: 13px monospace; }
+  #urlbar:focus { outline: none; border-color: #4a9eff; }
+  button { padding: 6px 14px; background: #4a9eff; border: none; border-radius: 3px; color: #fff; cursor: pointer; font: 13px sans-serif; }
+  button:hover { background: #3a8eef; }
+  #dt-btn { background: #555; }
+  #dt-btn:hover { background: #666; }
+  #status { color: #888; font-size: 12px; margin-left: 4px; }
+  #frame-container { flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #1a1a1a; }
+  #frame { max-width: 100%; max-height: 100%; cursor: crosshair; user-select: none; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <input id="urlbar" placeholder="URL or search…" autofocus>
+  <button id="go">Go</button>
+  <button id="dt-btn" title="Open Chrome DevTools for this page">DevTools</button>
+  <span id="status"></span>
+</div>
+<div id="frame-container"><img id="frame" draggable="false"></div>
+
+<script>
+const ws = new WebSocket(`ws://${location.host}`);
+const img = document.getElementById('frame');
+const urlbar = document.getElementById('urlbar');
+const status = document.getElementById('status');
+
+function send(method, params) {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ method, params }));
+}
+
+ws.onopen = () => status.textContent = 'connected';
+
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  if (msg.type === 'frame') {
+    img.src = `data:image/jpeg;base64,${msg.data}`;
+    img.dataset.meta = JSON.stringify(msg.metadata);
+  } else if (msg.type === 'url') {
+    urlbar.value = msg.url;
+  } else if (msg.type === 'error') {
+    status.textContent = `error: ${msg.error}`;
+  }
+};
+
+ws.onclose = () => status.textContent = 'disconnected';
+
+// ---------- Navigation ----------
+function navigate() {
+  const url = urlbar.value.trim();
+  if (!url) return;
+  status.textContent = 'loading…';
+  send('Page.navigate', { url: url.includes('://') ? url : `https://${url}` });
+}
+urlbar.addEventListener('keydown', (e) => { if (e.key === 'Enter') navigate(); });
+document.getElementById('go').onclick = navigate;
+
+// ---------- DevTools ----------
+document.getElementById('dt-btn').onclick = () => {
+  const w = window.open('about:blank', '_blank'); // ponytail: open sync to keep user gesture
+  if (!w) { status.textContent = 'popup blocked — allow popups and retry'; return; }
+  status.textContent = 'opening devtools…';
+  fetch('/json').then(r => r.json()).then(targets => {
+    const page = targets.find(t => t.type === 'page');
+    if (!page) { status.textContent = 'no page target'; w.close(); return; }
+    w.location = `http://${location.host}/devtools/inspector.html?ws=${location.host}/devtools/page/${page.id}`;
+  }).catch(() => { status.textContent = 'devtools: Chrome/Chromium required'; w.close(); });
+};
+
+// ---------- Mouse ----------
+function getCoords(e) {
+  const rect = img.getBoundingClientRect();
+  if (rect.width === 0) return { x: 0, y: 0 };
+  const meta = img.dataset.meta ? JSON.parse(img.dataset.meta) : null;
+  const sx = meta ? meta.deviceWidth / rect.width : 1;
+  const sy = meta ? meta.deviceHeight / rect.height : 1;
+  return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
+}
+
+img.addEventListener('mousemove', (e) => {
+  const { x, y } = getCoords(e);
+  send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+});
+
+img.addEventListener('mousedown', (e) => {
+  const { x, y } = getCoords(e);
+  const button = ['left', 'middle', 'right'][e.button];
+  send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, clickCount: 1 });
+});
+
+img.addEventListener('mouseup', (e) => {
+  const { x, y } = getCoords(e);
+  const button = ['left', 'middle', 'right'][e.button];
+  send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, clickCount: 1 });
+});
+
+img.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const { x, y } = getCoords(e);
+  send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: e.deltaX, deltaY: e.deltaY });
+}, { passive: false });
+
+img.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ---------- Keyboard ----------
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  e.preventDefault();
+  send('Input.dispatchKeyEvent', {
+    type: 'rawKeyDown',
+    key: e.key, code: e.code,
+    text: e.key.length === 1 ? e.key : undefined,
+    windowsVirtualKeyCode: e.keyCode,
+    unmodifiedText: e.key.length === 1 ? e.key : undefined,
+  });
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  send('Input.dispatchKeyEvent', { type: 'keyUp', key: e.key, code: e.code, windowsVirtualKeyCode: e.keyCode });
+});
+
+img.addEventListener('click', () => img.focus());
+</script>
+</body>
+</html>
