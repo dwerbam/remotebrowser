@@ -1,5 +1,5 @@
 {
-  "name": "remotebrowser",
+  "name": "@dwerbam/remotebrowser",
   "version": "1.0.0",
   "description": "Remote Chromium browser with built-in DevTools — zero install beyond Node.js",
   "bin": {
