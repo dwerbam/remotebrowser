@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 import { createServer, request as httpRequest } from 'http';
-import { readFileSync, existsSync, readdirSync } from 'fs';
+import { readFileSync } from 'fs';
 import { spawn } from 'child_process';
-import { homedir } from 'os';
 import { WebSocketServer, WebSocket } from 'ws';
 import { chromium } from 'playwright';
 
-// ponytail: --port / -p (CLI > env > 3000)
+// --port / -p (CLI > env > 3000)
 let PORT = 3000;
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i++) {
@@ -19,26 +18,7 @@ PORT = isNaN(PORT) ? 3000 : PORT;
 const CDP_PORT = 9223;
 const HTML = readFileSync(new URL('./viewer.html', import.meta.url), 'utf8');
 
-// ponytail: find full Chromium (headless shell lacks screencast)
-function findChromium() {
-  const base = process.env.PLAYWRIGHT_BROWSERS_PATH || homedir() + '/.cache/ms-playwright';
-  const plat = { linux: 'linux', darwin: 'mac', win32: 'win' }[process.platform] || 'linux';
-  const ext = process.platform === 'win32' ? '.exe' : '';
-  try {
-    for (const d of readdirSync(base)) {
-      if (!d.startsWith('chromium-') || d.includes('shell')) continue;
-      const bin = `${base}/${d}/chrome-${plat}/chrome${ext}`;
-      if (existsSync(bin)) return bin;
-    }
-  } catch {}
-  return undefined;
-}
-
-const CHROME = findChromium();
-if (!CHROME) {
-  console.error('Full Chromium not found. Run: npx playwright install chromium --no-shell');
-  process.exit(1);
-}
+const CHROME = chromium.executablePath();
 
 let _browser = null;
 
