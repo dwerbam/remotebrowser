@@ -5,7 +5,7 @@ Remote Chromium browser via CDP screencast — view and interact with a headless
 ## Usage
 
 ```bash
-npx remotebrowser --port 3000
+npx @dwerbam/remotebrowser --port 3000
 ```
 
 Open `http://localhost:3000` — you'll see the remote browser.
