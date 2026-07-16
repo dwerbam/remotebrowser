@@ -2,13 +2,25 @@
   "name": "remotebrowser",
   "version": "1.0.0",
   "description": "Remote Chromium browser with built-in DevTools — zero install beyond Node.js",
-  "bin": { "remotebrowser": "./server.mjs" },
-  "files": ["server.mjs", "viewer.html"],
+  "bin": {
+    "remotebrowser": "server.mjs"
+  },
+  "files": [
+    "server.mjs",
+    "viewer.html"
+  ],
   "scripts": {
     "postinstall": "npx playwright install chromium --no-shell"
   },
-  "keywords": ["remote", "browser", "chromium", "devtools", "cdp", "screencast"],
-  "author": "",
+  "keywords": [
+    "remote",
+    "browser",
+    "chromium",
+    "devtools",
+    "cdp",
+    "screencast"
+  ],
+  "author": "dwerbam",
   "license": "ISC",
   "dependencies": {
     "playwright": "^1.61.1",
